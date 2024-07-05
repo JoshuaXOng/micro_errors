@@ -1,0 +1,7 @@
+[package]
+name = "micro_errors"
+version = "0.1.0"
+edition = "2021"
+description = "Utilities to deal with errors without taking the derive macro approach."
+repository = "https://github.com/JoshuaXOng/micro_errors"
+license-file = "LICENSE"
