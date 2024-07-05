@@ -17,9 +17,28 @@ Err::<(), _>(std::io::Error::other("not an `ErrorChain`"))
 Creating an `ErrorChain` from an existing `ErrorChain`.
 
 ```rust
-Err::<(), _>(ErrorChain::start("key glock"))
-    .map_err(ErrorChain::add_fn("i dunno"))
-    .expect_err("look above")
+println!(
+    "{}",
+    Err::<(), _>(ErrorChain::start("key glock"))
+        .map_err(ErrorChain::add_fn("i dunno"))
+        .expect_err("look above")
+)
+```
+
+Output of the `println!` being something like below.
+
+```
+Error no. 0: i dunno
+Error no. 1: who I be
+Error no. 2: key glock
+Approximate backtrace of error no. 2:
+   0: micro_errors::ErrorLink::severed
+             at ./src/lib.rs:57:23
+   1: micro_errors::ErrorChain<alloc::string::String>::start
+             at ./src/lib.rs:74:13
+   2: micro_errors::test_crate
+             at ./src/lib.rs:14:22
+   3: micro_errors::test_crate::{{closure}}
 ```
 
 Again, creating an `ErrorChain` from an existing `ErrorChain`.
