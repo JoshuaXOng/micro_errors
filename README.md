@@ -44,12 +44,12 @@ impl std::fmt::Display for ErrorReasons {
 }
 println!(
     "{}", 
-    Err::<(), _>(ErrorChain(ErrorReasons::One, ErrorLink::Severed(Backtrace::capture())))
+    Err::<(), _>(ErrorChain(ErrorReasons::One, ErrorLink::severed()))
         .map_err(|e| ErrorChain::add("food", e))
         .expect_err("look above")
 );
 
-match Err::<(), _>(ErrorChain(ErrorReasons::Two, ErrorLink::Severed(Backtrace::capture()))) {
+match Err::<(), _>(ErrorChain(ErrorReasons::Two, ErrorLink::severed())) {
     Err(error_chain) if error_chain.0 == ErrorReasons::Two => println!("{}", error_chain),
     _ => panic!("look above"),
 }

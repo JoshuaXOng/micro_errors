@@ -36,12 +36,12 @@ fn test_crate() {
     }
     println!(
         "{}", 
-        Err::<(), _>(ErrorChain(ErrorReasons::One, ErrorLink::Severed(Backtrace::capture())))
+        Err::<(), _>(ErrorChain(ErrorReasons::One, ErrorLink::severed()))
             .map_err(|e| ErrorChain::add("food", e))
             .expect_err("look above")
     );
 
-    match Err::<(), _>(ErrorChain(ErrorReasons::Two, ErrorLink::Severed(Backtrace::capture()))) {
+    match Err::<(), _>(ErrorChain(ErrorReasons::Two, ErrorLink::severed())) {
         Err(error_chain) if error_chain.0 == ErrorReasons::Two => println!("{}", error_chain),
         _ => panic!("look above"),
     }
@@ -52,13 +52,26 @@ pub enum ErrorLink {
     Continued(String, Box<ErrorLink>)
 }
 
+impl ErrorLink {
+    pub fn severed() -> Self {
+        Self::Severed(Backtrace::capture())
+    }
+
+    pub fn continued(
+        error_message: impl Into<String>, 
+        next_link: impl Into<Box<ErrorLink>>
+    ) -> Self {
+        Self::Continued(error_message.into(), next_link.into())
+    }
+}
+
 pub struct ErrorChain<T: Display>(pub T, pub ErrorLink);
 
 impl ErrorChain<String> {
     pub fn start(error_message: impl Into<String>) -> Self {
         Self(
             error_message.into(), 
-            ErrorLink::Severed(Backtrace::capture())
+            ErrorLink::severed()
         )
     }
 
@@ -70,7 +83,10 @@ impl ErrorChain<String> {
         move |current_chain| {
             Self(
                 error_message.into(),
-                ErrorLink::Continued(current_chain.0.to_string(), Box::new(current_chain.1))
+                ErrorLink::continued(
+                    current_chain.0.to_string(), 
+                    current_chain.1
+                )
             )
         }
     }
@@ -85,7 +101,7 @@ impl ErrorChain<String> {
                 error_message.into(),
                 ErrorLink::Continued(
                     underlying_error.to_string(), 
-                    Box::new(ErrorLink::Severed(Backtrace::capture()))
+                    Box::new(ErrorLink::severed())
                 ) 
             )
         }
