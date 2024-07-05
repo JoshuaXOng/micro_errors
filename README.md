@@ -4,6 +4,8 @@ Utilities to deal with errors without taking the derive macro approach.
 
 Exposes a struct `ErrorChain` to typically be used within the `Err` variant of `Result`. `ErrorChain` contains a recusive struct `ErrorLink` containing a summary message or a backtrace of the last link.
 
+`ErrorChain` contains a generic payload, of which for `String` utilities have been implemented to aid chaining (e.g., `.map_err`'ing).
+
 ## Gist
 
 Creating an `ErrorChain` from a non `ErrorChain`.
