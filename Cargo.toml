@@ -1,6 +1,6 @@
 [package]
 name = "micro_errors"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "Utilities to deal with errors without taking the derive macro approach."
 repository = "https://github.com/JoshuaXOng/micro_errors"
