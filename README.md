@@ -31,9 +31,8 @@ Output of the `println!` being something like below.
 
 ```
 Error no. 0: i dunno
-Error no. 1: who I be
-Error no. 2: key glock
-Approximate backtrace of error no. 2:
+Error no. 1: key glock
+Approximate backtrace of error no. 1:
    0: micro_errors::ErrorLink::severed
              at ./src/lib.rs:57:23
    1: micro_errors::ErrorChain<alloc::string::String>::start
