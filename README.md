@@ -19,7 +19,6 @@ Creating an `ErrorChain` from a non `ErrorChain`.
 pub fn function_1() -> Result<(), ErrorChain<String>> {
     Err::<(), _>(std::io::Error::other("not an `ErrorChain`"))
         .map_err(ErrorChain::onboard_fn("that is ok"))
-        .expect_err("look above")
 }
 ```
 
@@ -30,11 +29,10 @@ pub fn function_2() -> Result<(), ErrorChain<String>> {
     Err::<(), _>(ErrorChain::start("key glock"))
         .map_err(ErrorChain::add_fn("who I be"))
         .map_err(ErrorChain::add_fn("I dunno"))
-        .expect_err("look above")
 }
 ```
 
-Output of the `println!` being something like below.
+Output of displaying/`println!`ing the error being something like below.
 
 ```
 Error no. 0: I dunno
@@ -79,6 +77,5 @@ pub fn function_3() -> Result<(), ErrorChain<String>> {
 
     Err::<(), _>(ErrorChain(ErrorReasons::One, ErrorLink::severed()))
         .map_err(|e| ErrorChain::add("food", e))
-        .expect_err("look above")
 }
 ```
