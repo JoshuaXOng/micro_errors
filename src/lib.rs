@@ -1,9 +1,9 @@
-use std::{backtrace::Backtrace, fmt::Display};
+use std::{backtrace::Backtrace, fmt::{Display, Debug}};
 
 #[test]
 fn test_crate() {
     println!(
-        "{}", 
+        "{:#?}", 
         Err::<(), _>(std::io::Error::other("not an `ErrorChain`"))
             .map_err(ErrorChain::onboard_fn("that is ok"))
             .expect_err("look above")
@@ -13,7 +13,7 @@ fn test_crate() {
         "{}", 
         Err::<(), _>(ErrorChain::start("key glock"))
             .map_err(ErrorChain::add_fn("who I be"))
-            .map_err(ErrorChain::add_fn("i dunno"))
+            .map_err(ErrorChain::add_fn("I dunno"))
             .expect_err("look above")
     );
 
@@ -47,6 +47,7 @@ fn test_crate() {
     }
 }
 
+#[derive(Debug)]
 pub enum ErrorLink {
     Severed(Backtrace),
     Continued(String, Box<ErrorLink>)
@@ -65,6 +66,7 @@ impl ErrorLink {
     }
 }
 
+#[derive(Debug)]
 pub struct ErrorChain<T: Display>(pub T, pub ErrorLink);
 
 impl ErrorChain<String> {
@@ -116,7 +118,7 @@ impl<T: std::fmt::Display> std::fmt::Display for ErrorChain<T> {
             error_link = match error_link {
                 ErrorLink::Severed(end_backtrace) => {
                     write!(
-                        f, "Approximate backtrace of error no. {}:\n{end_backtrace}\n", 
+                        f, "Approximate backtrace of error no. {}:\n{end_backtrace}", 
                         error_number - 1
                     )?;
                     break;
