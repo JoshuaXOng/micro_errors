@@ -4,4 +4,4 @@ version = 3
 
 [[package]]
 name = "micro_errors"
-version = "0.2.4"
+version = "0.3.0"
