@@ -30,49 +30,76 @@ mod tests {
         assert!(B::letter() == 'b');
     }
 
+    fn is_output_default(default_output: &str) {
+        assert_eq!(
+            default_output
+                .matches("Error no. 0: Higher level error.\nError no. 1: Underlying error.")
+                .collect::<Vec<_>>()
+                .len(),
+            1
+        );
+        has_only_one_backtrace(default_output);
+    }
+    fn has_only_one_backtrace(formatted_link: &str) {
+        assert_eq!(
+            formatted_link 
+                .matches("Approximate backtrace of error no. ")
+                .collect::<Vec<_>>()
+                .len(),
+            1
+        );
+    }
+
     #[test]
     #[allow(non_snake_case)]
     #[allow(deprecated)]
     fn test__chaining_non_error_chain() {
-        println!(
+        let format_output = format!(
             "{}", 
             Err::<(), _>(std::io::Error::other("Underlying error."))
                 .map_err(ErrorChain::link_fn("Higher level error."))
                 .expect_err("look above")
         );
+        println!("{}", format_output);
+        is_output_default(&format_output);
     }
+
     #[test]
     #[allow(non_snake_case)]
     fn test__chaining_non_error_link_() {
-        println!(
+        let format_output = format!(
             "{}", 
             Err::<(), _>(std::io::Error::other("Underlying error."))
-                .map_err(std::io::Error::link_fn("Higher level error."))
+                .map_err(|e| e.link("Higher level error."))
                 .expect_err("look above")
         );
+        println!("{}", format_output);
+        is_output_default(&format_output);
     }
 
     #[test]
     #[allow(deprecated)]
     #[allow(non_snake_case)]
     fn test__chaining_error_chain() {
-        println!(
+        let format_output = format!(
             "{}", 
             Err::<(), _>(ErrorChain::start("Underlying error."))
                 .map_err(ErrorChain::link_fn("Higher level error."))
                 .expect_err("look above")
         );
+        println!("{}", format_output);
+        is_output_default(&format_output);
     }
 
     #[test]
     #[allow(non_snake_case)]
     fn test__chaining_error_link_() {
-        println!(
-            "{}", 
-            Err::<(), _>(ErrorLink_::new_string("Underlying error."))
-                .map_err(ErrorLink_::link_fn("Higher level error."))
-                .expect_err("look above")
-        );
+        let error_link: ErrorLink_<String> = Err::<(), _>(ErrorLink_::new_string("Underlying error."))
+            .map_err(|e| e.link("Higher level error."))
+            .expect_err("look above");
+        let format_output = format!("{error_link}");
+        println!("{}", format_output);
+        is_output_default(&format_output);
     }
 
     impl ErrorLink_<i32> {
@@ -107,22 +134,47 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test__chaining_error_link__non_string_payload() {
-        println!(
-            "{}", 
-            Err::<(), _>(ErrorLink_::new_i32(100))
-                .map_err(ErrorLink_::link_fn("Higher level error."))
-                .expect_err("look above")
+        let error_link: ErrorLink_<String> = Err::<(), _>(ErrorLink_::new_i32(100))
+            .map_err(|e| e.link("Higher level error."))
+            .expect_err("look above");
+        let mut format_output = format!("{error_link}");
+        println!("{}", format_output);
+        assert_eq!(
+            format_output 
+                .matches("Error no. 0: Higher level error.\nError no. 1: 100")
+                .collect::<Vec<_>>()
+                .len(),
+            1
         );
+        has_only_one_backtrace(&format_output);
 
-        println!(
-            "{}", 
-            Err::<(), _>(ErrorLink_::new_reason(ErrorReasons::One))
-                .map_err(ErrorLink_::link_fn("Higher level error."))
-                .expect_err("look above")
+        let error_link: ErrorLink_<String> = Err::<(), _>(ErrorLink_::new_reason(ErrorReasons::One))
+            .map_err(|e| e.link("Higher level error."))
+            .expect_err("look above");
+        format_output = format!("{}", error_link);
+        println!("{}", format_output);
+        assert_eq!(
+            format_output 
+                .matches("Error no. 0: Higher level error.\nError no. 1: First reason for underlying error.")
+                .collect::<Vec<_>>()
+                .len(),
+            1
         );
+        has_only_one_backtrace(&format_output);
 
         match Err::<(), _>(ErrorLink_::new_reason(ErrorReasons::Two)) {
-            Err(error_chain) if error_chain.0 == ErrorReasons::Two => println!("{}", error_chain),
+            Err(error_chain) if error_chain.0 == ErrorReasons::Two => {
+                format_output = format!("{}", error_chain);
+                println!("{}", format_output);
+                assert_eq!(
+                    format_output 
+                        .matches("Error no. 0: Second reason for underlying error.")
+                        .collect::<Vec<_>>()
+                        .len(),
+                    1
+                );
+                has_only_one_backtrace(&format_output);       
+            },
             _ => panic!("look above"),
         }
     }
@@ -131,23 +183,27 @@ mod tests {
     #[allow(deprecated)]
     #[allow(non_snake_case)]
     fn test__chaining_non_error_chain_and_non_error_trait() {
-        println!(
+        let format_output = format!(
             "{}", 
             Err::<(), _>(String::from("Underlying error."))
                 .map_err(ErrorChain::onboard_fn("Higher level error."))
                 .expect_err("look above")
         );
-
+        println!("{}", format_output);
+        is_output_default(&format_output);
     }
+
     #[test]
     #[allow(non_snake_case)]
     fn test__chaining_non_error_link_and_non_error_trait() {
-        println!(
+        let format_output = format!(
             "{}", 
             Err::<(), _>(String::from("Underlying error."))
-                .map_err(String::link_fn("Higher level error."))
+                .map_err(|e| e.link("Higher level error."))
                 .expect_err("look above")
         );
+        println!("{}", format_output);
+        is_output_default(&format_output);
     }
 }
 
@@ -265,25 +321,45 @@ pub enum NextLink {
 #[derive(Debug)]
 pub struct ErrorLink_<Payload: Display>(pub Payload, pub NextLink);
 
-impl ErrorLink_<String> {
-    pub fn new_string(error_message: impl Into<String>) -> Self {
-        Self(error_message.into(), NextLink::None(Backtrace::capture()))
-    }
-
-    pub fn link_fn<T: Display>(error_message: impl Into<String>) -> impl FnOnce(ErrorLink_<T>) -> Self {
-        move |next_link| {
-            let next_link = Box::new(ErrorLink_(next_link.0.to_string(), next_link.1));
-            ErrorLink_(error_message.into(), NextLink::Some(next_link))
+impl<Payload: Display + Debug> std::error::Error for ErrorLink_<Payload> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match &self.1 {
+            NextLink::None(_) => None,
+            NextLink::Some(next_link) => Some(next_link)
         }
     }
 }
 
+impl<FromPayload: Display> ErrorLink_<FromPayload> {
+    pub fn link<ToPayload: Display>(self, error_payload: impl Into<ToPayload>) -> ErrorLink_<ToPayload> {
+        Self::link_fn(error_payload)(self)
+    }
+
+    pub fn link_fn<ToPayload: Display>(error_payload: impl Into<ToPayload>) -> impl FnOnce(Self) -> ErrorLink_<ToPayload> {
+        move |underlying_error| {
+            let next_link = Box::new(ErrorLink_(underlying_error.0.to_string(), underlying_error.1));
+            ErrorLink_(error_payload.into(), NextLink::Some(next_link))
+        }
+    }
+}
+
+impl ErrorLink_<String> {
+    pub fn new_string(error_message: impl Into<String>) -> Self {
+        Self(error_message.into(), NextLink::None(Backtrace::capture()))
+    }
+}
+
 pub trait ErrorLinkable<T, Payload: Display>: Any + Display {
+    fn link(self, error_message: impl Into<Payload>) -> ErrorLink_<Payload>;
     fn link_fn(error_message: impl Into<Payload>) -> impl FnOnce(T) -> ErrorLink_<Payload>;
 }
 
 impl<T: Any + Display> ErrorLinkable<T, String> for T {
-    fn link_fn(error_message: impl Into<String>) -> impl FnOnce(T) -> ErrorLink_<String> {
+    fn link(self, error_message: impl Into<String>) -> ErrorLink_<String> {
+        Self::link_fn(error_message)(self)
+    }
+
+    fn link_fn(error_message: impl Into<String>) -> impl FnOnce(Self) -> ErrorLink_<String> {
         move |underlying_error| {
             let next_link = Box::new(ErrorLink_(
                 String::from(underlying_error.to_string()), 
@@ -294,7 +370,7 @@ impl<T: Any + Display> ErrorLinkable<T, String> for T {
     }
 }
 
-impl<T: Display> Display for ErrorLink_<T> {
+impl<Payload: Display> Display for ErrorLink_<Payload> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Error no. 0: {}\n", self.0)?;
         let mut next_link = &self.1;
