@@ -21,13 +21,13 @@ mod tests {
     struct B;
     impl B {
         fn letter() -> char {
-            'b'
+            'B'
         }
     }
 
     #[test]
     fn test_favour_concrete() {
-        assert!(B::letter() == 'b');
+        assert!(B::letter() == 'B');
     }
 
     fn is_output_default(default_output: &str) {
@@ -63,15 +63,15 @@ mod tests {
         println!("{}", format_output);
         is_output_default(&format_output);
     }
-
     #[test]
     #[allow(non_snake_case)]
     fn test__chaining_non_error_link_() {
+        let error_link: ErrorLink_<String> = Err::<(), _>(std::io::Error::other("Underlying error."))
+            .map_err(|e| e.as_link())
+            .map_err(|e| e.link("Higher level error."))
+            .expect_err("look above");
         let format_output = format!(
-            "{}", 
-            Err::<(), _>(std::io::Error::other("Underlying error."))
-                .map_err(|e| e.link("Higher level error."))
-                .expect_err("look above")
+            "{}", error_link
         );
         println!("{}", format_output);
         is_output_default(&format_output);
@@ -95,6 +95,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test__chaining_error_link_() {
         let error_link: ErrorLink_<String> = Err::<(), _>(ErrorLink_::new_string("Underlying error."))
+            .map_err(|e| e.as_link() as ErrorLink_<String>)
             .map_err(|e| e.link("Higher level error."))
             .expect_err("look above");
         let format_output = format!("{error_link}");
@@ -135,6 +136,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test__chaining_error_link__non_string_payload() {
         let error_link: ErrorLink_<String> = Err::<(), _>(ErrorLink_::new_i32(100))
+            .map_err(|e| e.as_link() as ErrorLink_<i32>)
             .map_err(|e| e.link("Higher level error."))
             .expect_err("look above");
         let mut format_output = format!("{error_link}");
@@ -343,6 +345,12 @@ impl<FromPayload: Display> ErrorLink_<FromPayload> {
     }
 }
 
+impl<FromPayload: Display> ErrorLink_<FromPayload> {
+    pub fn as_link<ToPayload: From<FromPayload> + Display>(self) -> ErrorLink_<ToPayload> {
+        ErrorLink_(self.0.into(), self.1)
+    }
+}
+
 impl ErrorLink_<String> {
     pub fn new_string(error_message: impl Into<String>) -> Self {
         Self(error_message.into(), NextLink::None(Backtrace::capture()))
@@ -352,6 +360,7 @@ impl ErrorLink_<String> {
 pub trait ErrorLinkable<T, Payload: Display>: Any + Display {
     fn link(self, error_message: impl Into<Payload>) -> ErrorLink_<Payload>;
     fn link_fn(error_message: impl Into<Payload>) -> impl FnOnce(T) -> ErrorLink_<Payload>;
+    fn as_link(self) -> ErrorLink_<Payload>;
 }
 
 impl<T: Any + Display> ErrorLinkable<T, String> for T {
@@ -367,6 +376,13 @@ impl<T: Any + Display> ErrorLinkable<T, String> for T {
             ));
             ErrorLink_(error_message.into(), NextLink::Some(next_link))
         }
+    }
+
+    fn as_link(self) -> ErrorLink_<String> {
+        ErrorLink_(
+            self.to_string(),
+            NextLink::None(Backtrace::capture())
+        )
     }
 }
 

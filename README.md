@@ -14,11 +14,21 @@ Creating an `ErrorLink_` from a non `ErrorLink_`.
 use crate::ErrorLinkable;
 pub fn function() -> Result<(), ErrorLink_<String>> {
     Err::<(), _>(std::io::Error::other("Underlying error."))
+        .map_err(|e| e.as_link())
+}
+```
+
+Linking an `ErrorLink_` from a non `ErrorLink_`.
+
+```rust
+use crate::ErrorLinkable;
+pub fn function() -> Result<(), ErrorLink_<String>> {
+    Err::<(), _>(std::io::Error::other("Underlying error."))
         .map_err(|e| e.link("Higher level error."))
 }
 ```
 
-Creating an `ErrorLink_` from an existing `ErrorLink_`.
+Linking an `ErrorLink_` from an existing `ErrorLink_`.
 
 ```rust
 pub fn function() -> Result<(), ErrorLink_<String>> {
