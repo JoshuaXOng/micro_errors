@@ -1,3 +1,5 @@
+//#![feature(min_specialization)]
+
 use std::{any::Any, backtrace::Backtrace, fmt::{Debug, Display}};
 
 #[cfg(test)]
@@ -136,7 +138,6 @@ mod tests {
     #[allow(non_snake_case)]
     fn test__chaining_error_link__non_string_payload() {
         let error_link: ErrorLink_<String> = Err::<(), _>(ErrorLink_::new_i32(100))
-            .map_err(|e| e.as_link() as ErrorLink_<i32>)
             .map_err(|e| e.link("Higher level error."))
             .expect_err("look above");
         let mut format_output = format!("{error_link}");
@@ -312,6 +313,55 @@ impl<T: std::fmt::Display> std::fmt::Display for ErrorChain<T> {
 
         Ok(())
     }
+}
+
+trait ResultExt<OkVariant, FromPayload: Display> {
+    fn me_l<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
+    -> Result<OkVariant, ErrorLink_<ToPayload>>;
+    fn me_al<ToPayload: From<FromPayload> + Display>(self)
+    -> Result<OkVariant, ErrorLink_<ToPayload>>;
+}
+
+impl<OkVariant, ErrorVariant: Display> ResultExt<OkVariant, ErrorVariant>
+for Result<OkVariant, ErrorVariant> {
+    fn me_l<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
+    -> Result<OkVariant, ErrorLink_<ToPayload>> {
+        self.map_err(|e| {
+            let next_link = Box::new(ErrorLink_(
+                e.to_string(), 
+                NextLink::None(Backtrace::capture())
+            ));
+            ErrorLink_(error_payload.into(), NextLink::Some(next_link))
+        })
+    }
+
+    fn me_al<ToPayload: From<ErrorVariant> + Display>(self)
+    -> Result<OkVariant, ErrorLink_<ToPayload>> {
+        self.map_err(|e| ErrorLink_(e.into(), NextLink::None(Backtrace::capture())))
+    }
+}
+
+impl<OkVariant, FromPayload: Display> ResultExt<OkVariant, FromPayload>
+for Result<OkVariant, ErrorLink_<FromPayload>> {
+    fn me_l<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
+    -> Result<OkVariant, ErrorLink_<ToPayload>> {
+        self.map_err(|e| {
+            let next_link = Box::new(ErrorLink_(e.0.to_string(), e.1));
+            ErrorLink_(error_payload.into(), NextLink::Some(next_link))
+        })
+    }
+
+    fn me_al<ToPayload: From<FromPayload> + Display>(self)
+    -> Result<OkVariant, ErrorLink_<ToPayload>> {
+        self.map_err(|e| ErrorLink_(e.0.into(), e.1))
+    }
+}
+
+pub fn function() -> Result<(), ErrorLink_<String>> {
+    Err::<(), _>(std::io::Error::other("Underlying error."))
+        //.me_al()?;
+        .map_err(|e| e.as_link());
+    Ok(())
 }
 
 #[derive(Debug)]
