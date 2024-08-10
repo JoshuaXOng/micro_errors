@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "nightly", feature(min_specialization))]
+
 use std::{any::Any, backtrace::Backtrace, fmt::{Debug, Display}};
 
 #[cfg(test)]
@@ -7,6 +9,8 @@ mod tests {
     use crate::ErrorLink_;
     use crate::ErrorLinkable;
     use crate::NextLink;
+    #[cfg(feature = "nightly")]
+    use crate::ResultExt;
     use std::backtrace::Backtrace;
 
     #[allow(dead_code)]
@@ -136,7 +140,6 @@ mod tests {
     #[allow(non_snake_case)]
     fn test__chaining_error_link__non_string_payload() {
         let error_link: ErrorLink_<String> = Err::<(), _>(ErrorLink_::new_i32(100))
-            .map_err(|e| e.as_link() as ErrorLink_<i32>)
             .map_err(|e| e.link("Higher level error."))
             .expect_err("look above");
         let mut format_output = format!("{error_link}");
@@ -206,6 +209,97 @@ mod tests {
         );
         println!("{}", format_output);
         is_output_default(&format_output);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__resultext__chaining_non() {
+        let format_output = format!(
+            "{}", 
+            Err::<(), _>(String::from("Underlying error."))
+                .map_err(|e| e.link("Higher level error."))
+                .expect_err("look above")
+        );
+        println!("{}", format_output);
+        is_output_default(&format_output);
+    }
+
+    #[cfg(feature = "nightly")]
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__resultext__chaining_error_link__string_payload() {
+        let format_output = format!(
+            "{}",
+            Err::<(), _>(ErrorLink_::new_string("Underlying error."))
+                .me_al()
+                .me_l("Higher level error.")
+                .expect_err("look above")
+        );
+        println!("{}", format_output);
+        is_output_default(&format_output);
+    }
+
+    #[cfg(feature = "nightly")]
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__resultext__chaining_error_link__non_string_payload() {
+        let format_output = format!(
+            "{}",
+            Err::<(), _>(ErrorLink_::new_i32(100))
+                .me_al()
+                .expect_err("look above")
+        );
+        println!("{}", format_output);
+        assert_eq!(
+            format_output 
+                .matches("100")
+                .collect::<Vec<_>>()
+                .len(),
+            1
+        );
+        has_only_one_backtrace(&format_output);
+    }
+
+    #[cfg(feature = "nightly")]
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__resultext__chaining_non_error_link__string_payload() {
+        let format_output = format!(
+            "{}",
+            Err::<(), _>(String::from("Underlying error."))
+                .me_al()
+                .expect_err("look above")
+        );
+        println!("{}", format_output);
+        assert_eq!(
+            format_output 
+                .matches("Underlying error.")
+                .collect::<Vec<_>>()
+                .len(),
+            1
+        );
+        has_only_one_backtrace(&format_output);
+    }
+
+    #[cfg(feature = "nightly")]
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__resultext__chaining_non_error_link__non_string_payload() {
+        let format_output = format!(
+            "{}",
+            Err::<(), _>(100)
+                .me_al()
+                .expect_err("look above")
+        );
+        println!("{}", format_output);
+        assert_eq!(
+            format_output 
+                .matches("100")
+                .collect::<Vec<_>>()
+                .len(),
+            1
+        );
+        has_only_one_backtrace(&format_output);
     }
 }
 
@@ -311,6 +405,91 @@ impl<T: std::fmt::Display> std::fmt::Display for ErrorChain<T> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(feature = "nightly")]
+pub trait ResultExt<OkVariant, ToPayload: Display> {
+    fn me_l(self, error_payload: impl Into<ToPayload>)
+    -> Result<OkVariant, ErrorLink_<ToPayload>>;
+    fn me_al(self) -> Result<OkVariant, ErrorLink_<ToPayload>>;
+}
+
+#[cfg(feature = "nightly")]
+impl<OkVariant, ErrorVariant: Display> ResultExt<OkVariant, String> 
+for Result<OkVariant, ErrorVariant> {
+    default fn me_l(self, error_payload: impl Into<String>)
+    -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| {
+            let next_link = Box::new(ErrorLink_(
+                e.to_string(), 
+                NextLink::None(Backtrace::capture()))
+            );
+            ErrorLink_(error_payload.into(), NextLink::Some(next_link))
+        })
+    }
+
+    default fn me_al(self) -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| ErrorLink_(
+            e.to_string(),
+            NextLink::None(Backtrace::capture())
+        ))
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<OkVariant> ResultExt<OkVariant, String> 
+for Result<OkVariant, String> {
+    fn me_l(self, error_payload: impl Into<String>)
+    -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| {
+            let next_link = Box::new(ErrorLink_(e, 
+                NextLink::None(Backtrace::capture()))
+            );
+            ErrorLink_(error_payload.into(), NextLink::Some(next_link))
+        })
+    }
+
+    fn me_al(self) -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| ErrorLink_(
+            e,
+            NextLink::None(Backtrace::capture())
+        ))
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<OkVariant, FromPayload: Display> ResultExt<OkVariant, String> 
+for Result<OkVariant, ErrorLink_<FromPayload>> {
+    default fn me_l(self, error_payload: impl Into<String>)
+    -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| {
+            let next_link = Box::new(ErrorLink_(e.0.to_string(), e.1));
+            ErrorLink_(
+                error_payload.into(),
+                NextLink::Some(next_link)
+            )
+        })
+    }
+
+    default fn me_al(self) -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| ErrorLink_(e.0.to_string(), e.1))
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<OkVariant> ResultExt<OkVariant, String> 
+for Result<OkVariant, ErrorLink_<String>> {
+    fn me_l(self, error_payload: impl Into<String>)
+    -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| ErrorLink_(
+            error_payload.into(),
+            NextLink::Some(Box::new(e))
+        ))
+    }
+
+    fn me_al(self) -> Result<OkVariant, ErrorLink_<String>> {
+        self
     }
 }
 

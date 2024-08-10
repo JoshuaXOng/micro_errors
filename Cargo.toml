@@ -1,7 +1,10 @@
 [package]
 name = "micro_errors"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "Utilities to deal with errors without taking the derive macro approach."
 repository = "https://github.com/JoshuaXOng/micro_errors"
 license = "Apache-2.0"
+
+[features]
+nightly = []
