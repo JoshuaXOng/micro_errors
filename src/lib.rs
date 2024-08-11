@@ -1,4 +1,4 @@
-//#![feature(min_specialization)]
+#![cfg_attr(feature = "nightly", feature(min_specialization))]
 
 use std::{any::Any, backtrace::Backtrace, fmt::{Debug, Display}};
 
@@ -9,6 +9,8 @@ mod tests {
     use crate::ErrorLink_;
     use crate::ErrorLinkable;
     use crate::NextLink;
+    #[cfg(feature = "nightly")]
+    use crate::ResultExt;
     use std::backtrace::Backtrace;
 
     #[allow(dead_code)]
@@ -208,6 +210,97 @@ mod tests {
         println!("{}", format_output);
         is_output_default(&format_output);
     }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__resultext__chaining_non() {
+        let format_output = format!(
+            "{}", 
+            Err::<(), _>(String::from("Underlying error."))
+                .map_err(|e| e.link("Higher level error."))
+                .expect_err("look above")
+        );
+        println!("{}", format_output);
+        is_output_default(&format_output);
+    }
+
+    #[cfg(feature = "nightly")]
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__resultext__chaining_error_link__string_payload() {
+        let format_output = format!(
+            "{}",
+            Err::<(), _>(ErrorLink_::new_string("Underlying error."))
+                .me_al()
+                .me_l("Higher level error.")
+                .expect_err("look above")
+        );
+        println!("{}", format_output);
+        is_output_default(&format_output);
+    }
+
+    #[cfg(feature = "nightly")]
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__resultext__chaining_error_link__non_string_payload() {
+        let format_output = format!(
+            "{}",
+            Err::<(), _>(ErrorLink_::new_i32(100))
+                .me_al()
+                .expect_err("look above")
+        );
+        println!("{}", format_output);
+        assert_eq!(
+            format_output 
+                .matches("100")
+                .collect::<Vec<_>>()
+                .len(),
+            1
+        );
+        has_only_one_backtrace(&format_output);
+    }
+
+    #[cfg(feature = "nightly")]
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__resultext__chaining_non_error_link__string_payload() {
+        let format_output = format!(
+            "{}",
+            Err::<(), _>(String::from("Underlying error."))
+                .me_al()
+                .expect_err("look above")
+        );
+        println!("{}", format_output);
+        assert_eq!(
+            format_output 
+                .matches("Underlying error.")
+                .collect::<Vec<_>>()
+                .len(),
+            1
+        );
+        has_only_one_backtrace(&format_output);
+    }
+
+    #[cfg(feature = "nightly")]
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__resultext__chaining_non_error_link__non_string_payload() {
+        let format_output = format!(
+            "{}",
+            Err::<(), _>(100)
+                .me_al()
+                .expect_err("look above")
+        );
+        println!("{}", format_output);
+        assert_eq!(
+            format_output 
+                .matches("100")
+                .collect::<Vec<_>>()
+                .len(),
+            1
+        );
+        has_only_one_backtrace(&format_output);
+    }
 }
 
 #[derive(Debug)]
@@ -315,53 +408,89 @@ impl<T: std::fmt::Display> std::fmt::Display for ErrorChain<T> {
     }
 }
 
-trait ResultExt<OkVariant, FromPayload: Display> {
-    fn me_l<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
+#[cfg(feature = "nightly")]
+pub trait ResultExt<OkVariant, ToPayload: Display> {
+    fn me_l(self, error_payload: impl Into<ToPayload>)
     -> Result<OkVariant, ErrorLink_<ToPayload>>;
-    fn me_al<ToPayload: From<FromPayload> + Display>(self)
-    -> Result<OkVariant, ErrorLink_<ToPayload>>;
+    fn me_al(self) -> Result<OkVariant, ErrorLink_<ToPayload>>;
 }
 
-impl<OkVariant, ErrorVariant: Display> ResultExt<OkVariant, ErrorVariant>
+#[cfg(feature = "nightly")]
+impl<OkVariant, ErrorVariant: Display> ResultExt<OkVariant, String> 
 for Result<OkVariant, ErrorVariant> {
-    fn me_l<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
-    -> Result<OkVariant, ErrorLink_<ToPayload>> {
+    default fn me_l(self, error_payload: impl Into<String>)
+    -> Result<OkVariant, ErrorLink_<String>> {
         self.map_err(|e| {
             let next_link = Box::new(ErrorLink_(
                 e.to_string(), 
-                NextLink::None(Backtrace::capture())
-            ));
+                NextLink::None(Backtrace::capture()))
+            );
             ErrorLink_(error_payload.into(), NextLink::Some(next_link))
         })
     }
 
-    fn me_al<ToPayload: From<ErrorVariant> + Display>(self)
-    -> Result<OkVariant, ErrorLink_<ToPayload>> {
-        self.map_err(|e| ErrorLink_(e.into(), NextLink::None(Backtrace::capture())))
+    default fn me_al(self) -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| ErrorLink_(
+            e.to_string(),
+            NextLink::None(Backtrace::capture())
+        ))
     }
 }
 
-impl<OkVariant, FromPayload: Display> ResultExt<OkVariant, FromPayload>
+#[cfg(feature = "nightly")]
+impl<OkVariant> ResultExt<OkVariant, String> 
+for Result<OkVariant, String> {
+    fn me_l(self, error_payload: impl Into<String>)
+    -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| {
+            let next_link = Box::new(ErrorLink_(e, 
+                NextLink::None(Backtrace::capture()))
+            );
+            ErrorLink_(error_payload.into(), NextLink::Some(next_link))
+        })
+    }
+
+    fn me_al(self) -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| ErrorLink_(
+            e,
+            NextLink::None(Backtrace::capture())
+        ))
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<OkVariant, FromPayload: Display> ResultExt<OkVariant, String> 
 for Result<OkVariant, ErrorLink_<FromPayload>> {
-    fn me_l<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
-    -> Result<OkVariant, ErrorLink_<ToPayload>> {
+    default fn me_l(self, error_payload: impl Into<String>)
+    -> Result<OkVariant, ErrorLink_<String>> {
         self.map_err(|e| {
             let next_link = Box::new(ErrorLink_(e.0.to_string(), e.1));
-            ErrorLink_(error_payload.into(), NextLink::Some(next_link))
+            ErrorLink_(
+                error_payload.into(),
+                NextLink::Some(next_link)
+            )
         })
     }
 
-    fn me_al<ToPayload: From<FromPayload> + Display>(self)
-    -> Result<OkVariant, ErrorLink_<ToPayload>> {
-        self.map_err(|e| ErrorLink_(e.0.into(), e.1))
+    default fn me_al(self) -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| ErrorLink_(e.0.to_string(), e.1))
     }
 }
 
-pub fn function() -> Result<(), ErrorLink_<String>> {
-    Err::<(), _>(std::io::Error::other("Underlying error."))
-        //.me_al()?;
-        .map_err(|e| e.as_link());
-    Ok(())
+#[cfg(feature = "nightly")]
+impl<OkVariant> ResultExt<OkVariant, String> 
+for Result<OkVariant, ErrorLink_<String>> {
+    fn me_l(self, error_payload: impl Into<String>)
+    -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| ErrorLink_(
+            error_payload.into(),
+            NextLink::Some(Box::new(e))
+        ))
+    }
+
+    fn me_al(self) -> Result<OkVariant, ErrorLink_<String>> {
+        self
+    }
 }
 
 #[derive(Debug)]
