@@ -12,6 +12,8 @@ mod tests {
     #[cfg(feature = "nightly")]
     use crate::ResultExt;
     use std::backtrace::Backtrace;
+    use crate::LinkableResult1of2;
+    use crate::LinkableResult2of2;
 
     #[allow(dead_code)]
     trait X {
@@ -37,7 +39,7 @@ mod tests {
     fn is_output_default(default_output: &str) {
         assert_eq!(
             default_output
-                .matches("Error no. 0: Higher level error.\nError no. 1: Underlying error.")
+                .matches("Link no. 0: Higher level error.\nLink no. 1: Underlying error.")
                 .collect::<Vec<_>>()
                 .len(),
             1
@@ -47,7 +49,7 @@ mod tests {
     fn has_only_one_backtrace(formatted_link: &str) {
         assert_eq!(
             formatted_link 
-                .matches("Approximate backtrace of error no. ")
+                .matches("Approximate backtrace of link no. ")
                 .collect::<Vec<_>>()
                 .len(),
             1
@@ -146,7 +148,7 @@ mod tests {
         println!("{}", format_output);
         assert_eq!(
             format_output 
-                .matches("Error no. 0: Higher level error.\nError no. 1: 100")
+                .matches("Link no. 0: Higher level error.\nLink no. 1: 100")
                 .collect::<Vec<_>>()
                 .len(),
             1
@@ -160,7 +162,7 @@ mod tests {
         println!("{}", format_output);
         assert_eq!(
             format_output 
-                .matches("Error no. 0: Higher level error.\nError no. 1: First reason for underlying error.")
+                .matches("Link no. 0: Higher level error.\nLink no. 1: First reason for underlying error.")
                 .collect::<Vec<_>>()
                 .len(),
             1
@@ -173,7 +175,7 @@ mod tests {
                 println!("{}", format_output);
                 assert_eq!(
                     format_output 
-                        .matches("Error no. 0: Second reason for underlying error.")
+                        .matches("Link no. 0: Second reason for underlying error.")
                         .collect::<Vec<_>>()
                         .len(),
                     1
@@ -301,6 +303,100 @@ mod tests {
         );
         has_only_one_backtrace(&format_output);
     }
+
+    #[allow(dead_code)]
+    struct DisplayableAndIntoStringable(String);
+    impl From<DisplayableAndIntoStringable> for String {
+        fn from(value: DisplayableAndIntoStringable) -> Self {
+            value.0
+        }
+    }
+    impl std::fmt::Display for DisplayableAndIntoStringable {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+            write!(f, "DisplayableAndIntoStringable")
+        }
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__link_conversion__to_error_link_string() {
+        let _ = || -> Result<(), ErrorLink_<String>> {
+            Err::<(), _>(ErrorLink_::new("These `Result`s would be typically from function calls."))?;
+            Err::<(), _>(String::from(
+                "So, if the error is an `ErrorLink_` of same payload, or the payload type itself, \
+                `?` can be used."
+            ))?;
+            #[cfg(feature = "nightly")]
+            Err::<(), _>(std::io::Error::other(
+                "`ErrorLink_<String>` is like a terminal type. `me_as_slink()?` can always be called, \
+                and all can turn into it."
+            )).me_as_slink()?;
+            Err::<(), _>(ErrorLink_::<DisplayableAndIntoStringable>::new(
+                DisplayableAndIntoStringable(String::from(
+                    "`impl<T> from <T> for T` exists, so `?` cannot cover all `ErrorLink_` to \
+                    `ErrorLink_`s. Hence `me_as_link`."
+                ))
+            )).me_as_link()?;
+            Ok(())
+        }();
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__adding_link__to_error_link_string() {
+        let _ = || -> Result<(), ErrorLink_<String>> {
+            Err::<(), _>(ErrorLink_::<std::io::Error>::new(
+                std::io::Error::other("Some data relating to an unhappy code path.")
+            ))
+                .me_link("Some more information.")?;
+            Ok(())
+        }();
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__replacing_payload__to_error_link_string() {
+        let _ = || -> Result<(), ErrorLink_<String>> {
+            Err::<(), _>(ErrorLink_::<std::io::Error>::new(std::io::Error::other("Something ugly.")))
+                .map_err(|_| ErrorLink_::new("Get replaced."))?;
+            Err::<(), _>(ErrorLink_::<std::io::Error>::new(std::io::Error::other("Something ugly.")))
+                .map_err(|e| e.replace("Get replaced. But keep its linkage."))?;
+            Ok(())
+        }();
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__link_conversion__to_error_link_non_string() {
+        let _ = || -> Result<(), ErrorLink_<i32>> {
+            Err::<(), _>(ErrorLink_::new(88))?;
+            Err::<(), _>(44)?;
+            Err::<(), _>(ErrorLink_::<i8>::new(8)).me_as_link()?;
+            Ok(())
+        }();
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__adding_link__to_error_link_non_string() {
+        let _ = || -> Result<(), ErrorLink_<i32>> {
+            Err::<(), _>(ErrorLink_::new_string(""))
+                .me_link(100)?;
+            Ok(())
+        }();
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test__replacing_payload__to_error_link_non_string() {
+        let _ = || -> Result<(), ErrorLink_<i32>> {
+            Err::<(), _>(ErrorLink_::<std::io::Error>::new(std::io::Error::other("Something ugly.")))
+                .map_err(|_| ErrorLink_::new(3))?;
+            Err::<(), _>(ErrorLink_::<std::io::Error>::new(std::io::Error::other("Something ugly.")))
+                .map_err(|e| e.replace(1))?;
+            Ok(())
+        }();
+    }
 }
 
 #[derive(Debug)]
@@ -386,25 +482,87 @@ impl ErrorChain<String> {
 #[allow(deprecated)]
 impl<T: std::fmt::Display> std::fmt::Display for ErrorChain<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Error no. 0: {}\n", self.0)?;
+        write!(f, "Link no. 0: {}\n", self.0)?;
         let mut error_link = &self.1;
         for error_number in 1.. {
             error_link = match error_link {
                 ErrorLink::Severed(end_backtrace) => {
                     write!(
-                        f, "Approximate backtrace of error no. {}:\n{end_backtrace}", 
+                        f, "Approximate backtrace of link no. {}:\n{end_backtrace}", 
                         error_number - 1
                     )?;
                     break;
                 }, 
                 ErrorLink::Continued(error_message, error_link) => {
-                    write!(f, "Error no. {error_number}: {error_message}\n")?;
+                    write!(f, "Link no. {error_number}: {error_message}\n")?;
                     error_link
                 },
             }
         }
 
         Ok(())
+    }
+}
+
+pub trait LinkableResult1of2<OkVariant> {
+    fn me_link<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
+    -> Result<OkVariant, ErrorLink_<ToPayload>>;
+    fn me_as_slink(self) -> Result<OkVariant, ErrorLink_<String>>;
+}
+
+#[cfg(feature = "nightly")]
+impl<OkVariant, ErrorVariant: Display> LinkableResult1of2<OkVariant>
+for Result<OkVariant, ErrorVariant> {
+    default fn me_link<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
+    -> Result<OkVariant, ErrorLink_<ToPayload>> {
+        self.map_err(|e| {
+            let next_link = Box::new(ErrorLink_(
+                e.to_string(),
+                NextLink::None(Backtrace::capture())
+            ));
+            ErrorLink_(error_payload.into(), NextLink::Some(next_link))
+        })
+    }
+
+    default fn me_as_slink(self) -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| ErrorLink_(
+            e.to_string(),
+            NextLink::None(Backtrace::capture())
+        ))
+    }
+}
+
+impl<OkVariant, FromPayload: Display> LinkableResult1of2<OkVariant>
+for Result<OkVariant, ErrorLink_<FromPayload>> {
+    fn me_link<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
+    -> Result<OkVariant, ErrorLink_<ToPayload>> {
+        self.map_err(|e| {
+            let next_link = Box::new(ErrorLink_(e.0.to_string(), e.1));
+            ErrorLink_(error_payload.into(), NextLink::Some(next_link))
+        })
+    }
+
+    fn me_as_slink(self) -> Result<OkVariant, ErrorLink_<String>> {
+        self.map_err(|e| ErrorLink_(e.0.to_string(), e.1))
+    }
+}
+
+pub trait LinkableResult2of2<OkVariant, FromPayload: Display> {
+    fn me_as_link<ToPayload: From<FromPayload> + Display>(self)
+    -> Result<OkVariant, ErrorLink_<ToPayload>>;
+}
+
+impl<OkVariant, FromPayload: Display> LinkableResult2of2<OkVariant, FromPayload>
+for Result<OkVariant, ErrorLink_<FromPayload>> {
+    fn me_as_link<ToPayload: From<FromPayload> + Display>(self)
+    -> Result<OkVariant, ErrorLink_<ToPayload>> {
+        self.map_err(|e| ErrorLink_(e.0.into(), e.1))
+    }
+}
+
+impl<P: Display> From<P> for ErrorLink_<P> {
+    fn from(value: P) -> Self {
+        ErrorLink_(value, NextLink::None(Backtrace::capture()))
     }
 }
 
@@ -502,16 +660,17 @@ pub enum NextLink {
 #[derive(Debug)]
 pub struct ErrorLink_<Payload: Display>(pub Payload, pub NextLink);
 
-impl<Payload: Display + Debug> std::error::Error for ErrorLink_<Payload> {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match &self.1 {
-            NextLink::None(_) => None,
-            NextLink::Some(next_link) => Some(next_link)
-        }
+impl<Payload: Display> ErrorLink_<Payload> {
+    pub fn new(error_payload: impl Into<Payload>) -> Self {
+        Self(error_payload.into(), NextLink::None(Backtrace::capture()))
     }
-}
 
-impl<FromPayload: Display> ErrorLink_<FromPayload> {
+    pub fn replace<NewPayload: Display>(
+        self, error_payload: impl Into<NewPayload>
+    ) -> ErrorLink_<NewPayload>{
+        ErrorLink_(error_payload.into(), self.1)
+    }
+
     pub fn link<ToPayload: Display>(self, error_payload: impl Into<ToPayload>) -> ErrorLink_<ToPayload> {
         Self::link_fn(error_payload)(self)
     }
@@ -522,10 +681,8 @@ impl<FromPayload: Display> ErrorLink_<FromPayload> {
             ErrorLink_(error_payload.into(), NextLink::Some(next_link))
         }
     }
-}
 
-impl<FromPayload: Display> ErrorLink_<FromPayload> {
-    pub fn as_link<ToPayload: From<FromPayload> + Display>(self) -> ErrorLink_<ToPayload> {
+    pub fn as_link<ToPayload: From<Payload> + Display>(self) -> ErrorLink_<ToPayload> {
         ErrorLink_(self.0.into(), self.1)
     }
 }
@@ -536,9 +693,9 @@ impl ErrorLink_<String> {
     }
 }
 
-pub trait ErrorLinkable<T, Payload: Display>: Any + Display {
-    fn link(self, error_message: impl Into<Payload>) -> ErrorLink_<Payload>;
-    fn link_fn(error_message: impl Into<Payload>) -> impl FnOnce(T) -> ErrorLink_<Payload>;
+pub trait ErrorLinkable<Self_, Payload: Display>: Any + Display {
+    fn link(self, error_payload: impl Into<Payload>) -> ErrorLink_<Payload>;
+    fn link_fn(error_payload: impl Into<Payload>) -> impl FnOnce(Self_) -> ErrorLink_<Payload>;
     fn as_link(self) -> ErrorLink_<Payload>;
 }
 
@@ -567,24 +724,34 @@ impl<T: Any + Display> ErrorLinkable<T, String> for T {
 
 impl<Payload: Display> Display for ErrorLink_<Payload> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Error no. 0: {}\n", self.0)?;
+        write!(f, "An error occurred.\n")?;
+        write!(f, "Link no. 0: {}\n", self.0)?;
         let mut next_link = &self.1;
         for error_number in 1.. {
             next_link = match next_link {
                 NextLink::None(end_backtrace) => {
                     write!(
-                        f, "Approximate backtrace of error no. {}:\n{end_backtrace}", 
+                        f, "Approximate backtrace of link no. {}:\n{end_backtrace}", 
                         error_number - 1
                     )?;
                     break;
                 }, 
                 NextLink::Some(error_link) => {
-                    write!(f, "Error no. {error_number}: {}\n", error_link.0)?;
+                    write!(f, "Link no. {error_number}: {}\n", error_link.0)?;
                     &error_link.1
                 },
             }
         }
 
         Ok(())
+    }
+}
+
+impl<Payload: Display + Debug> std::error::Error for ErrorLink_<Payload> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match &self.1 {
+            NextLink::None(_) => None,
+            NextLink::Some(next_link) => Some(next_link)
+        }
     }
 }
