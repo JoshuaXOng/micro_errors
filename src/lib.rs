@@ -1,4 +1,4 @@
-#![feature(min_specialization)]
+#![feature(specialization)]
 
 use std::{any::Any, backtrace::Backtrace, fmt::{Debug, Display}};
 
@@ -229,6 +229,7 @@ mod tests {
     fn test__resultext__chaining_error_link__string_payload() -> Result<(), ErrorLink_<String>> {
         let _ = Err::<(), _>(String::from("")).me_al()?;
         let _: Result<(), ErrorLink_<String>> = Err::<(), _>(ErrorLink_::new_string("")).me_fal();
+        let _ = Err::<(), _>(std::io::Error::other("Underlying error.")).me_als();
         Ok(())
     }
 }
@@ -338,73 +339,97 @@ impl<T: std::fmt::Display> std::fmt::Display for ErrorChain<T> {
     }
 }
 
-pub trait ResultExt<OkVariant, ToPayload: Display> {
-    fn me_l(self, error_payload: impl Into<ToPayload>)
-    -> Result<OkVariant, ErrorLink_<ToPayload>>;
-    fn me_al(self) -> Result<OkVariant, ErrorLink_<ToPayload>>;
+trait RE<OkVariant, ErrorVariant, FromPayload: Display, ToPayload: Display> {
+    fn x_me_al(self) -> Result<OkVariant, ErrorLink_<ToPayload>>;
 }
-
-pub trait ResultExt2<OkVariant, ToPayload: Display> {
-    fn me_l(self, error_payload: impl Into<ToPayload>)
-    -> Result<OkVariant, ErrorLink_<ToPayload>>;
-    fn me_al(self) -> Result<OkVariant, ErrorLink_<ToPayload>>;
-    fn me_fl(self, error_payload: impl Into<ToPayload>)
-    -> Result<OkVariant, ErrorLink_<ToPayload>>;
-    fn me_fal(self) -> Result<OkVariant, ErrorLink_<ToPayload>>;
-}
-
-impl<OkVariant, ErrorVariant: Display, ToPayload: From<ErrorVariant> + Display> ResultExt<OkVariant, ToPayload>
+impl<OkVariant, ErrorVariant: Display, ToPayload: Display>
+RE<OkVariant, ErrorVariant, ErrorVariant, ToPayload> 
 for Result<OkVariant, ErrorVariant> {
-    fn me_l(self, error_payload: impl Into<ToPayload>)
+    default fn x_me_al(self) -> Result<OkVariant, ErrorLink_<ToPayload>> {
+        todo!()
+    }
+}
+impl<OkVariant, ErrorVariant: Display>
+RE<OkVariant, ErrorVariant, ErrorVariant, String> 
+for Result<OkVariant, ErrorVariant> {
+    fn x_me_al(self) -> Result<OkVariant, ErrorLink_<String>> {
+        todo!()
+    }
+}
+impl<OkVariant, ErrorVariant: Into<String> + Display>
+RE<OkVariant, ErrorVariant, ErrorVariant, String>
+for Result<OkVariant, ErrorVariant> {
+    fn x_me_al(self) -> Result<OkVariant, ErrorLink_<String>> {
+        todo!()
+    }
+}
+fn t() -> Result<(), ErrorLink_<std::io::Error>> {
+    Err::<(), _>(std::io::Error::other("")).x_me_al()
+}
+fn tt() -> Result<(), ErrorLink_<String>> {
+    Err::<(), _>(std::io::Error::other("")).x_me_al()
+}
+fn ttt() -> Result<(), ErrorLink_<String>> {
+    Err::<(), _>(String::new()).x_me_al()
+}
+
+pub trait ResultExt<OkVariant, ErrorVariant: Display> {
+    fn me_l<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
+    -> Result<OkVariant, ErrorLink_<ToPayload>>;
+    fn me_al<ToPayload: From<ErrorVariant> + Display>(self) -> Result<OkVariant, ErrorLink_<ToPayload>>;
+    fn me_als(self) -> Result<OkVariant, ErrorLink_<String>>;
+}
+
+pub trait ResultExt2<OkVariant, FromPayload> {
+    fn me_l<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
+    -> Result<OkVariant, ErrorLink_<ToPayload>>;
+    fn me_al<ToPayload: From<FromPayload> + Display>(self) -> Result<OkVariant, ErrorLink_<ToPayload>>;
+    fn me_als(self) -> Result<OkVariant, ErrorLink_<String>>;
+
+    fn me_fl<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
+    -> Result<OkVariant, ErrorLink_<ToPayload>>;
+    fn me_fal<ToPayload: From<FromPayload> + Display>(self) -> Result<OkVariant, ErrorLink_<ToPayload>>;
+    fn me_fals(self) -> Result<OkVariant, ErrorLink_<String>>;
+}
+
+impl<OkVariant, ErrorVariant: Display> ResultExt<OkVariant, ErrorVariant>
+for Result<OkVariant, ErrorVariant> {
+    fn me_l<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
     -> Result<OkVariant, ErrorLink_<ToPayload>> {
         todo!()
     }
 
-    fn me_al(self) -> Result<OkVariant, ErrorLink_<ToPayload>> {
+    fn me_al<ToPayload: From<ErrorVariant> + Display>(self) -> Result<OkVariant, ErrorLink_<ToPayload>> {
+        todo!()
+    }
+
+    fn me_als(self) -> Result<OkVariant, ErrorLink_<String>> {
         todo!()
     }
 }
 
-impl<OkVariant, FromPayload: Display, ToPayload: From<FromPayload> + Display>
-ResultExt2<OkVariant, ToPayload>
+impl<OkVariant, FromPayload: Display>
+ResultExt2<OkVariant, FromPayload>
 for Result<OkVariant, ErrorLink_<FromPayload>> {
-    default fn me_l(self, error_payload: impl Into<ToPayload>)
+    fn me_l<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
     -> Result<OkVariant, ErrorLink_<ToPayload>> {
         todo!()
     }
-
-    default fn me_al(self) -> Result<OkVariant, ErrorLink_<ToPayload>> {
+    fn me_al<ToPayload: From<FromPayload> + Display>(self) -> Result<OkVariant, ErrorLink_<ToPayload>> {
+        todo!()
+    }
+    fn me_als(self) -> Result<OkVariant, ErrorLink_<String>> {
         todo!()
     }
 
-    default fn me_fl(self, error_payload: impl Into<ToPayload>)
+    fn me_fl<ToPayload: Display>(self, error_payload: impl Into<ToPayload>)
     -> Result<OkVariant, ErrorLink_<ToPayload>> {
         todo!()
     }
-
-    default fn me_fal(self) -> Result<OkVariant, ErrorLink_<ToPayload>> {
+    fn me_fal<ToPayload: From<FromPayload> + Display>(self) -> Result<OkVariant, ErrorLink_<ToPayload>> {
         todo!()
     }
-}
-
-impl<OkVariant>
-ResultExt2<OkVariant, String>
-for Result<OkVariant, ErrorLink_<String>> {
-    fn me_l(self, error_payload: impl Into<String>)
-    -> Result<OkVariant, ErrorLink_<String>> {
-        todo!()
-    }
-
-    fn me_al(self) -> Result<OkVariant, ErrorLink_<String>> {
-        todo!()
-    }
-
-    fn me_fl(self, error_payload: impl Into<String>)
-    -> Result<OkVariant, ErrorLink_<String>> {
-        todo!()
-    }
-
-    fn me_fal(self) -> Result<OkVariant, ErrorLink_<String>> {
+    fn me_fals(self) -> Result<OkVariant, ErrorLink_<String>> {
         todo!()
     }
 }
