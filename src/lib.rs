@@ -6,6 +6,8 @@ mod linkable_results;
 #[cfg(feature = "nightly")]
 mod result_ext;
 
+use std::{any::Any, backtrace::Backtrace, fmt::Display};
+
 #[allow(deprecated)]
 pub use error_chain::{ErrorLink, ErrorChain};
 pub use linkable_results::{LinkableResult1of2, LinkableResult2of2};
@@ -408,4 +410,140 @@ mod tests {
             Ok(())
         }();
     }
+}
+
+// TODO: struct String_(&'static str);
+
+trait DisplayableAny: Display + Any {}
+impl<T: Display + Any> DisplayableAny for T {}
+
+enum NL {
+    None(Backtrace),
+    Some(Box<EL<Box<dyn DisplayableAny>>>)
+}
+
+struct EL<Payload: DisplayableAny>(Payload, NL);
+
+impl<Payload: DisplayableAny> EL<Payload> {
+    fn new(link_payload: impl Into<Payload>) -> Self {
+        Self(link_payload.into(), NL::None(Backtrace::capture()))
+    }
+}
+
+impl<T: DisplayableAny> From<T> for EL<T> {
+    fn from(value: T) -> Self {
+        Self(value, NL::None(Backtrace::capture()))
+    }
+}
+
+impl<T: DisplayableAny> From<T> for EL<Box<T>> {
+    fn from(value: T) -> Self {
+        Self(Box::new(value), NL::None(Backtrace::capture()))
+    }
+}
+
+trait RE<O, E, FP: DisplayableAny> {
+    fn add_link<TP: DisplayableAny>(self, link_payload: impl Into<TP>) -> Result<O, EL<TP>>;
+    fn as_anylink(self) -> Result<O, EL<Box<dyn DisplayableAny>>>;
+    fn convert_link<TP: From<FP> + DisplayableAny>(self) -> Result<O, EL<TP>>;
+}
+
+impl<O, E: DisplayableAny> RE<O, E, E> for Result<O, E> {
+    fn add_link<TP: DisplayableAny>(self, link_payload: impl Into<TP>) -> Result<O, EL<TP>> {
+        self.map_err(|e| {
+            let next_link = Box::new(EL(
+                Box::new(e) as Box<dyn DisplayableAny>, 
+                NL::None(Backtrace::capture())
+            ));
+            EL(link_payload.into(), NL::Some(next_link))
+        })
+    }
+
+    fn as_anylink(self) -> Result<O, EL<Box<dyn DisplayableAny>>> {
+        self.map_err(|e| EL::new(Box::new(e) as Box<dyn DisplayableAny>))
+    }
+
+    fn convert_link<TP: From<E> + DisplayableAny>(self) -> Result<O, EL<TP>> {
+        self.map_err(|e| EL::new(e))
+    }
+}
+
+impl<O, E: DisplayableAny> RE<O, EL<E>, E> for Result<O, EL<E>> {
+    fn add_link<TP: DisplayableAny>(self, link_payload: impl Into<TP>) -> Result<O, EL<TP>> {
+        todo!()
+    }
+
+    fn as_anylink(self) -> Result<O, EL<Box<dyn DisplayableAny>>> {
+        todo!()
+    }
+
+    fn convert_link<TP: From<E> + DisplayableAny>(self) -> Result<O, EL<TP>> {
+        todo!()
+    }
+}
+
+impl<O, E: DisplayableAny> RE<O, EL<E>, E> for Result<O, EL<Box<E>>> {
+    fn add_link<TP: DisplayableAny>(self, link_payload: impl Into<TP>) -> Result<O, EL<TP>> {
+        todo!()
+    }
+
+    fn as_anylink(self) -> Result<O, EL<Box<dyn DisplayableAny>>> {
+        todo!()
+    }
+
+    fn convert_link<TP: From<E> + DisplayableAny>(self) -> Result<O, EL<TP>> {
+        todo!()
+    }
+}
+
+fn contract() -> Result<(), EL<Box<dyn DisplayableAny>>> {
+    Err::<(), _>(String::new()).add_link::<String>("").as_anylink()?;
+    Err::<(), _>(Box::new(String::new())).add_link::<String>("").as_anylink()?;
+    Err::<(), _>(EL::<String>::new(String::new())).add_link::<String>("").as_anylink()?;
+    Err::<(), _>(EL::<Box<String>>::new(Box::new(String::new()))).add_link::<String>("").as_anylink()?;
+
+    Err::<(), _>(String::new()).add_link::<String>("").as_anylink()?;
+
+    Ok(())
+}
+
+enum Reason {
+    One
+}
+
+impl std::fmt::Display for Reason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+
+impl From<String> for Reason {
+    fn from(value: String) -> Self {
+        todo!()
+    }
+}
+
+impl From<Box<String>> for Reason {
+    fn from(value: Box<String>) -> Self {
+        todo!()
+    }
+}
+
+fn expand() -> Result<(), EL<Reason>> {
+    Err::<(), _>(String::new()).add_link(Reason::One)?;
+    Err::<(), _>(Box::new(String::new())).add_link(Reason::One)?;
+    Err::<(), _>(EL::<String>::new(String::new())).add_link(Reason::One)?;
+    Err::<(), _>(EL::<Box<String>>::new(Box::new(String::new()))).add_link(Reason::One)?;
+
+    Err::<(), _>(String::new()).convert_link()?;
+    Err::<(), _>(Box::new(String::new())).convert_link()?;
+    Err::<(), _>(EL::<String>::new(String::new())).convert_link()?;
+    Err::<(), _>(EL::<Box<String>>::new(Box::new(String::new()))).convert_link()?;
+
+    contract().add_link(Reason::One)?;
+
+    Err::<(), _>(Reason::One)?;
+    Err::<(), _>(EL::new(Reason::One))?;
+
+    Ok(())
 }
